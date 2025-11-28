@@ -40,16 +40,22 @@ if script_tag:
                     if "headline" in item and "slug" in item:
                         slug = item.get("slug", "")
                         title = item.get("headline", "")
-                        desc = item.get("excerpt", "") or item.get("content", "")[:200]
+                        desc = item.get("excerpt", "") or item.get("content", "")
                         pub = item.get("published_at", "")
                         img = item.get("thumb", "")
                         
                         if title and slug:
                             url = f"https://www.dainikamadershomoy.com/news/{slug}"
                             
+                            # Ensure desc is a string
+                            if not isinstance(desc, str):
+                                desc = str(desc) if desc else ""
+                            
                             # Truncate description if too long
                             if len(desc) > 300:
                                 desc = desc[:297] + "..."
+                            elif len(desc) > 200:
+                                desc = desc[:200]
                             
                             articles.append({
                                 "url": url,
