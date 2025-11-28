@@ -44,12 +44,15 @@ if script_tag:
                         pub = item.get("published_at", "")
                         img = item.get("thumb", "")
                         
+                        # Ensure all fields are strings
+                        slug = str(slug) if slug else ""
+                        title = str(title) if title else ""
+                        desc = str(desc) if desc else ""
+                        pub = str(pub) if pub else ""
+                        img = str(img) if img else ""
+                        
                         if title and slug:
                             url = f"https://www.dainikamadershomoy.com/news/{slug}"
-                            
-                            # Ensure desc is a string
-                            if not isinstance(desc, str):
-                                desc = str(desc) if desc else ""
                             
                             # Truncate description if too long
                             if len(desc) > 300:
