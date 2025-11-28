@@ -2,7 +2,7 @@ import sys
 import os
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import re
 
@@ -183,7 +183,7 @@ for art in articles:
     ET.SubElement(item, "title").text = str(art["title"])
     ET.SubElement(item, "link").text = str(art["url"])
     ET.SubElement(item, "description").text = str(art["desc"])
-    ET.SubElement(item, "pubDate").text = str(art["pub"]) if art["pub"] else datetime.now(datetime.UTC).strftime("%a, %d %b %Y %H:%M:%S +0000")
+    ET.SubElement(item, "pubDate").text = str(art["pub"]) if art["pub"] else datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
     if art["img"]:
         ET.SubElement(item, "enclosure", url=str(art["img"]), type="image/jpeg")
     
