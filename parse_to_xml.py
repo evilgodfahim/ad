@@ -66,29 +66,22 @@ def extract_articles_from_file(filepath):
                     pub = str(pub) if pub else ""
                     img = str(img) if img else ""
                     
-                    # Validation checks - STRICT filtering for opinion articles only
+                    # Validation checks
                     is_valid_slug = (
                         slug and 
                         not slug.isdigit() and 
-                        len(slug) > 12 and  # Opinion slugs are longer
-                        (slug.startswith("019a") or slug.startswith("019b"))  # Opinion article pattern
+                        len(slug) > 10 and 
+                        slug.startswith("019a")  # Opinion articles typically start with this
                     )
                     
                     is_valid_title = (
                         title and 
                         not title.isdigit() and 
-                        len(title) > 10 and  # Opinion titles are usually longer
+                        len(title) > 5 and
                         not title.startswith("http")  # Exclude URLs
                     )
                     
-                    # Additional check: ensure description exists and is substantial
-                    has_valid_desc = desc and len(desc) > 20
-                    
-                    # Exclude news-like keywords in titles
-                    news_keywords = ["নির্বাচন", "পুড়ল", "হেফাজত", "আগুন", "দুর্ঘটনা", "গ্রেপ্তার"]
-                    is_likely_news = any(keyword in title for keyword in news_keywords)
-                    
-                    if is_valid_slug and is_valid_title and has_valid_desc and not is_likely_news:
+                    if is_valid_slug and is_valid_title:
                         url = f"https://www.dainikamadershomoy.com/news/{slug}"
                         
                         # Truncate description if too long
