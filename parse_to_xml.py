@@ -22,119 +22,113 @@ with open(HTML_FILE, "r", encoding="utf-8") as f:
 articles = []
 
 # --- Extract from JSON data embedded in the page ---
-# Find the script tag containing article data
 script_tag = soup.find("script", {"id": "__NUXT_DATA__", "type": "application/json"})
 if script_tag:
     try:
         json_data = json.loads(script_tag.string)
         
         # Helper function to resolve references in the JSON array
-        def resolve_value(val):
+        def resolve_value(val, depth=0):
+            if depth > 5:  # Prevent infinite recursion
+                return val
             if isinstance(val, int) and 0 <= val < len(json_data):
-                return json_data[val]
+                resolved = json_data[val]
+                # If it's still an int, try to resolve again
+                if isinstance(resolved, int) and resolved != val:
+                    return resolve_value(resolved, depth + 1)
+                return resolved
             return val
         
-        # Navigate through the JSON structure to find the category_all_news section
-        if isinstance(json_data, list) and len(json_data) > 1:
-            # Look for the data structure - typically at index 1
-            data_obj = json_data[1] if isinstance(json_data[1], dict) else {}
-            
-            # Find category_all_news key
-            category_news_idx = data_obj.get("category_all_news")
-            if category_news_idx and isinstance(category_news_idx, int):
-                category_news = resolve_value(category_news_idx)
+        # Debug: Print structure
+        print(f"JSON data length: {len(json_data)}")
+        if len(json_data) > 1 and isinstance(json_data[1], dict):
+            print(f"Keys in data object: {json_data[1].keys()}")
+        
+        # Find all article-like dictionaries in the JSON
+        for i, item in enumerate(json_data):
+            if isinstance(item, dict) and "headline" in item and "slug" in item:
+                # Resolve all fields
+                slug_val = item.get("slug")
+                title_val = item.get("headline")
+                desc_val = item.get("excerpt") or item.get("content")
+                pub_val = item.get("published_at")
+                img_val = item.get("thumb")
                 
-                # category_news should be a list of article indices
-                if isinstance(category_news, list):
-                    for art_idx in category_news:
-                        article = resolve_value(art_idx)
-                        
-                        if isinstance(article, dict) and "headline" in article and "slug" in article:
-                            # Resolve references to get actual values
-                            slug = resolve_value(article.get("slug", ""))
-                            title = resolve_value(article.get("headline", ""))
-                            desc = resolve_value(article.get("excerpt", "")) or resolve_value(article.get("content", ""))
-                            pub = resolve_value(article.get("published_at", ""))
-                            img = resolve_value(article.get("thumb", ""))
-                            
-                            # Ensure all fields are strings
-                            slug = str(slug) if slug and slug != 10 and not isinstance(slug, int) else ""
-                            title = str(title) if title and not isinstance(title, int) else ""
-                            desc = str(desc) if desc and desc != 10 and not isinstance(desc, int) else ""
-                            pub = str(pub) if pub and not isinstance(pub, int) else ""
-                            img = str(img) if img and not isinstance(img, int) else ""
-                            
-                            # Skip if title is still empty or numeric or too short
-                            if not title or title.isdigit() or len(title) < 5:
-                                continue
-                            
-                            # Opinion article slugs typically start with "019a" or similar
-                            if title and slug and not slug.isdigit() and len(slug) > 5:
-                                url = f"https://www.dainikamadershomoy.com/news/{slug}"
-                                
-                                # Truncate description if too long
-                                if len(desc) > 300:
-                                    desc = desc[:297] + "..."
-                                
-                                articles.append({
-                                    "url": url,
-                                    "title": title,
-                                    "desc": desc,
-                                    "pub": pub,
-                                    "img": img
-                                })
+                # Resolve references
+                slug = resolve_value(slug_val)
+                title = resolve_value(title_val)
+                desc = resolve_value(desc_val) if desc_val else ""
+                pub = resolve_value(pub_val)
+                img = resolve_value(img_val)
+                
+                # Convert to strings and validate
+                slug = str(slug) if slug else ""
+                title = str(title) if title else ""
+                desc = str(desc) if desc else ""
+                pub = str(pub) if pub else ""
+                img = str(img) if img else ""
+                
+                # Validation checks
+                is_valid_slug = (
+                    slug and 
+                    not slug.isdigit() and 
+                    len(slug) > 10 and 
+                    slug.startswith("019a")  # Opinion articles typically start with this
+                )
+                
+                is_valid_title = (
+                    title and 
+                    not title.isdigit() and 
+                    len(title) > 5 and
+                    not title.startswith("http")  # Exclude URLs
+                )
+                
+                if is_valid_slug and is_valid_title:
+                    url = f"https://www.dainikamadershomoy.com/news/{slug}"
+                    
+                    # Truncate description if too long
+                    if len(desc) > 300:
+                        desc = desc[:297] + "..."
+                    
+                    articles.append({
+                        "url": url,
+                        "title": title,
+                        "desc": desc,
+                        "pub": pub,
+                        "img": img
+                    })
+                    print(f"Found article: {title[:50]}...")
+                    
     except (json.JSONDecodeError, KeyError, IndexError) as e:
         print(f"Error parsing JSON data: {e}")
 
-# --- Fallback: Extract from HTML structure ---
+# --- Fallback: Parse from text in the original snippet you provided ---
 if not articles:
-    # Look for article links in the HTML
-    for link in soup.find_all("a", href=re.compile(r"/news/\w+")):
-        url = link.get("href", "")
-        if not url.startswith("http"):
-            url = "https://www.dainikamadershomoy.com" + url
-        
-        # Try to find title (headline)
-        title = None
-        h1 = link.find("h1")
-        h2 = link.find("h2")
-        h3 = link.find("h3")
-        
-        if h1:
-            title = h1.get_text(strip=True)
-        elif h2:
-            title = h2.get_text(strip=True)
-        elif h3:
-            title = h3.get_text(strip=True)
-        
-        if not title:
-            continue
-        
-        # Try to find description
-        desc = ""
-        p_tag = link.find("p")
-        if p_tag:
-            desc = p_tag.get_text(strip=True)
-        
-        # Try to find publication date
-        pub = ""
-        pub_tag = link.find(class_=re.compile(r"(date|time|publish)"))
-        if pub_tag:
-            pub = pub_tag.get_text(strip=True)
-        
-        # Try to find image
-        img = ""
-        img_tag = link.find("img")
-        if img_tag:
-            img = img_tag.get("src", "")
-        
-        articles.append({
-            "url": url,
-            "title": title,
-            "desc": desc,
-            "pub": pub,
-            "img": img
-        })
+    print("Trying fallback method - parsing from text patterns...")
+    
+    # Look for the patterns from your original data
+    patterns = [
+        (r'"headline":"([^"]+)"[^}]*"slug":"(019a[^"]+)"[^}]*"thumb":"([^"]+)"[^}]*"published_at":"([^"]+)"', 1, 2, 3, 4),
+    ]
+    
+    for pattern, title_idx, slug_idx, img_idx, pub_idx in patterns:
+        matches = re.finditer(pattern, content)
+        for match in matches:
+            title = match.group(title_idx)
+            slug = match.group(slug_idx)
+            img = match.group(img_idx)
+            pub = match.group(pub_idx)
+            
+            if title and slug and len(slug) > 10:
+                url = f"https://www.dainikamadershomoy.com/news/{slug}"
+                articles.append({
+                    "url": url,
+                    "title": title,
+                    "desc": "",
+                    "pub": pub,
+                    "img": img
+                })
+                print(f"Found article (regex): {title[:50]}...")
 
 # Remove duplicates based on URL
 seen_urls = set()
@@ -146,7 +140,13 @@ for art in articles:
 
 articles = unique_articles
 
-print(f"Found {len(articles)} articles")
+print(f"\nFound {len(articles)} total unique articles")
+
+if not articles:
+    print("WARNING: No articles found! Check HTML structure.")
+    # Print sample of HTML for debugging
+    print("\nSample HTML content:")
+    print(content[:1000])
 
 # --- Load or create XML ---
 if os.path.exists(XML_FILE):
