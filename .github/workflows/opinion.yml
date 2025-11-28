@@ -33,6 +33,6 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add opinion.html
+          git add opinion.html shompadokiyo.html
           git commit -m "Daily opinion update" || echo "No changes"
           git push
