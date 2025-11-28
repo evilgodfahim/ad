@@ -44,60 +44,58 @@ if script_tag:
         if len(json_data) > 1 and isinstance(json_data[1], dict):
             print(f"Keys in data object: {json_data[1].keys()}")
         
-        # Find all article-like dictionaries in the JSON
-        for i, item in enumerate(json_data):
-            if isinstance(item, dict) and "headline" in item and "slug" in item:
-                # Resolve all fields
-                slug_val = item.get("slug")
-                title_val = item.get("headline")
-                desc_val = item.get("excerpt") or item.get("content")
-                pub_val = item.get("published_at")
-                img_val = item.get("thumb")
+        # Navigate to the correct nested structure
+        # Based on the JSON: json_data[1] contains the data object
+        if len(json_data) > 1 and isinstance(json_data[1], dict):
+            data_obj = json_data[1].get("data")
+            if data_obj:
+                data_obj = resolve_value(data_obj)
                 
-                # Resolve references
-                slug = resolve_value(slug_val)
-                title = resolve_value(title_val)
-                desc = resolve_value(desc_val) if desc_val else ""
-                pub = resolve_value(pub_val)
-                img = resolve_value(img_val)
-                
-                # Convert to strings and validate
-                slug = str(slug) if slug else ""
-                title = str(title) if title else ""
-                desc = str(desc) if desc else ""
-                pub = str(pub) if pub else ""
-                img = str(img) if img else ""
-                
-                # Validation checks
-                is_valid_slug = (
-                    slug and 
-                    not slug.isdigit() and 
-                    len(slug) > 10 and 
-                    slug.startswith("019a")  # Opinion articles typically start with this
-                )
-                
-                is_valid_title = (
-                    title and 
-                    not title.isdigit() and 
-                    len(title) > 5 and
-                    not title.startswith("http")  # Exclude URLs
-                )
-                
-                if is_valid_slug and is_valid_title:
-                    url = f"https://www.dainikamadershomoy.com/news/{slug}"
-                    
-                    # Truncate description if too long
-                    if len(desc) > 300:
-                        desc = desc[:297] + "..."
-                    
-                    articles.append({
-                        "url": url,
-                        "title": title,
-                        "desc": desc,
-                        "pub": pub,
-                        "img": img
-                    })
-                    print(f"Found article: {title[:50]}...")
+                if isinstance(data_obj, dict):
+                    # Look for category_all_news key
+                    category_news = data_obj.get("category_all_news")
+                    if category_news:
+                        category_news = resolve_value(category_news)
+                        print(f"Found category_all_news: {type(category_news)}")
+                        
+                        # category_news should be a list or array of article references
+                        if isinstance(category_news, list):
+                            print(f"Processing {len(category_news)} items from category_all_news")
+                            
+                            for art_ref in category_news:
+                                article = resolve_value(art_ref)
+                                
+                                if isinstance(article, dict) and "headline" in article and "slug" in article:
+                                    # Resolve all fields
+                                    slug = resolve_value(article.get("slug"))
+                                    title = resolve_value(article.get("headline"))
+                                    desc = resolve_value(article.get("excerpt")) or resolve_value(article.get("content", ""))
+                                    pub = resolve_value(article.get("published_at"))
+                                    img = resolve_value(article.get("thumb"))
+                                    
+                                    # Convert to strings
+                                    slug = str(slug) if slug and not isinstance(slug, (int, type(None))) else ""
+                                    title = str(title) if title and not isinstance(title, (int, type(None))) else ""
+                                    desc = str(desc) if desc and not isinstance(desc, (int, type(None))) else ""
+                                    pub = str(pub) if pub and not isinstance(pub, (int, type(None))) else ""
+                                    img = str(img) if img and not isinstance(img, (int, type(None))) else ""
+                                    
+                                    # Basic validation
+                                    if title and slug and len(title) > 5 and len(slug) > 10:
+                                        url = f"https://www.dainikamadershomoy.com/news/{slug}"
+                                        
+                                        # Truncate description if too long
+                                        if len(desc) > 300:
+                                            desc = desc[:297] + "..."
+                                        
+                                        articles.append({
+                                            "url": url,
+                                            "title": title,
+                                            "desc": desc,
+                                            "pub": pub,
+                                            "img": img
+                                        })
+                                        print(f"Found article: {title[:50]}...")
                     
     except (json.JSONDecodeError, KeyError, IndexError) as e:
         print(f"Error parsing JSON data: {e}")
@@ -183,7 +181,7 @@ for art in articles:
     ET.SubElement(item, "title").text = str(art["title"])
     ET.SubElement(item, "link").text = str(art["url"])
     ET.SubElement(item, "description").text = str(art["desc"])
-    ET.SubElement(item, "pubDate").text = str(art["pub"]) if art["pub"] else datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+    ET.SubElement(item, "pubDate").text = str(art["pub"]) if art["pub"] else datetime.now(datetime.UTC).strftime("%a, %d %b %Y %H:%M:%S +0000")
     if art["img"]:
         ET.SubElement(item, "enclosure", url=str(art["img"]), type="image/jpeg")
     
