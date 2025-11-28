@@ -130,32 +130,55 @@ def extract_articles_from_file(filepath):
     return articles
 
 # --- Main processing ---
-all_articles = []
+# Extract from all HTML files and keep track by source
+articles_by_file = {}
 
-# Extract from all HTML files
 for html_file in HTML_FILES:
     file_articles = extract_articles_from_file(html_file)
-    all_articles.extend(file_articles)
+    articles_by_file[html_file] = file_articles
 
-# Remove duplicates based on URL (keep first occurrence)
-seen_urls = set()
+# Build sets of URLs from each file
+url_sets = {}
+for filename, arts in articles_by_file.items():
+    url_sets[filename] = set(art["url"] for art in arts)
+
+# Find common URLs (articles that appear in BOTH files)
+all_urls = set()
+for urls in url_sets.values():
+    all_urls.update(urls)
+
+# Count how many times each URL appears
+url_counts = {}
+for url in all_urls:
+    count = sum(1 for urls in url_sets.values() if url in urls)
+    url_counts[url] = count
+
+# Find common URLs (appear in more than one file)
+common_urls = {url for url, count in url_counts.items() if count > 1}
+
+print(f"\nCommon URLs found in multiple files: {len(common_urls)}")
+for url in common_urls:
+    print(f"  - {url}")
+
+# Collect only unique articles (not in common_urls)
 unique_articles = []
-duplicate_count = 0
+eliminated_count = 0
 
-for art in all_articles:
-    if art["url"] not in seen_urls:
-        seen_urls.add(art["url"])
-        unique_articles.append(art)
-    else:
-        duplicate_count += 1
-        print(f"Skipped duplicate: {art['title'][:50]}...")
+for filename, arts in articles_by_file.items():
+    for art in arts:
+        if art["url"] in common_urls:
+            eliminated_count += 1
+            print(f"Eliminated common article: {art['title'][:50]}...")
+        elif art["url"] not in [a["url"] for a in unique_articles]:  # Prevent any duplicates
+            unique_articles.append(art)
 
 articles = unique_articles
 
 print(f"\n=== Summary ===")
-print(f"Total articles found: {len(all_articles)}")
-print(f"Duplicates removed: {duplicate_count}")
-print(f"Unique articles: {len(articles)}")
+total_found = sum(len(arts) for arts in articles_by_file.values())
+print(f"Total articles found: {total_found}")
+print(f"Common articles eliminated: {eliminated_count}")
+print(f"Unique articles kept: {len(articles)}")
 
 if not articles:
     print("WARNING: No articles found! Check HTML structure.")
