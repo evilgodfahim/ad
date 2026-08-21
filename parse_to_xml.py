@@ -88,7 +88,7 @@ def extract_articles_from_file(filepath):
                         slug
                         and not slug.isdigit()
                         and len(slug) > 10
-                        and slug.startswith("019")
+                        and re.match(r'^\d{3}', slug)   # any 3-digit prefix, not hardcoded "019"
                     )
 
                     is_valid_title = (
@@ -116,7 +116,7 @@ def extract_articles_from_file(filepath):
 
     if not articles:
         print("Trying fallback method - parsing from text patterns...")
-        pattern = r'"headline":"([^"]+)"[^}]*"slug":"(019[^"]+)"[^}]*"thumb":"([^"]*)"[^}]*"published_at":"([^"]*)"'
+        pattern = r'"headline":"([^"]+)"[^}]*"slug":"(\d{3}[^"]+)"[^}]*"thumb":"([^"]*)"[^}]*"published_at":"([^"]*)"'
         for match in re.finditer(pattern, content):
             title, slug, img, pub = match.group(1), match.group(2), match.group(3), match.group(4)
             if title and slug and len(slug) > 10:
@@ -166,6 +166,16 @@ existing = {
     for item in channel.findall("item")
     if item.find("link") is not None
 }
+
+# ── DEBUG: URL comparison check ───────────────────────────────────────────────
+print(f"\n=== URL Debug ===")
+print(f"Existing URLs in XML: {len(existing)}")
+print(f"Sample existing URL : {next(iter(existing), 'EMPTY')}")
+for art in articles[:3]:
+    fixed = art["url"].replace("/news/", "/details/")
+    print(f"  Candidate : {fixed}")
+    print(f"  In existing: {fixed in existing}")
+# ── END DEBUG ─────────────────────────────────────────────────────────────────
 
 new_count = 0
 for art in articles:
