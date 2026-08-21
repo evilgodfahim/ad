@@ -2,13 +2,38 @@ import sys
 import os
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import re
 
 HTML_FILES = ["opinion.html", "shompadokiyo.html"]
 XML_FILE = "articles.xml"
 MAX_ITEMS = 500
+
+def is_within_last_25_hours(date_str):
+    """Parses a date string and checks if it falls within the last 25 hours."""
+    if not date_str:
+        return False
+        
+    try:
+        # Handle JS ISO format (e.g., '2023-10-12T08:30:00.000000Z')
+        clean_date_str = date_str.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(clean_date_str)
+        
+        # Ensure it has timezone info, assume UTC if missing
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        try:
+            # Fallback for standard SQL-like formats (e.g., '2023-10-12 08:30:00')
+            dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+            dt = dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            print(f"  [!] Warning: Could not parse date format: {date_str}")
+            return False
+
+    now = datetime.now(timezone.utc)
+    return (now - dt) <= timedelta(hours=25)
 
 
 def extract_articles_from_file(filepath):
@@ -84,6 +109,10 @@ def extract_articles_from_file(filepath):
                     pub = str(pub) if pub else ""
                     img = str(img) if img else ""
 
+                    # --- Time Check Filter ---
+                    if not is_within_last_25_hours(pub):
+                        continue
+
                     is_valid_slug = (
                         slug
                         and not slug.isdigit()
@@ -109,7 +138,7 @@ def extract_articles_from_file(filepath):
                             "pub": pub,
                             "img": img
                         })
-                        print(f"Found article: {title[:50]}...")
+                        print(f"Found valid recent article: {title[:50]}...")
 
         except (json.JSONDecodeError, KeyError, IndexError) as e:
             print(f"Error parsing JSON data: {e}")
@@ -119,10 +148,15 @@ def extract_articles_from_file(filepath):
         pattern = r'"headline":"([^"]+)"[^}]*"slug":"(019[^"]+)"[^}]*"thumb":"([^"]*)"[^}]*"published_at":"([^"]*)"'
         for match in re.finditer(pattern, content):
             title, slug, img, pub = match.group(1), match.group(2), match.group(3), match.group(4)
+            
+            # --- Time Check Filter for regex fallback ---
+            if not is_within_last_25_hours(pub):
+                continue
+                
             if title and slug and len(slug) > 10:
                 url = f"https://www.dainikamadershomoy.com/news/{slug}"
                 articles.append({"url": url, "title": title, "desc": "", "pub": pub, "img": img})
-                print(f"Found article (regex): {title[:50]}...")
+                print(f"Found valid recent article (regex): {title[:50]}...")
 
     return articles
 
@@ -139,10 +173,10 @@ for html_file in HTML_FILES:
             seen_urls.add(art["url"])
 
 print(f"\n=== Summary ===")
-print(f"Total unique articles collected: {len(articles)}")
+print(f"Total recent unique articles collected: {len(articles)}")
 
 if not articles:
-    print("WARNING: No articles found! Check HTML structure.")
+    print("No recent articles found in the last 25 hours. Check HTML structure or dates.")
 
 # ── XML merge ─────────────────────────────────────────────────────────────────
 if os.path.exists(XML_FILE):
@@ -170,6 +204,8 @@ existing = {
 new_count = 0
 for art in articles:
     fixed_url = art["url"].replace("/news/", "/details/")
+    
+    # This prevents adding duplicates to the XML (satisfies "only new ones")
     if fixed_url in existing:
         continue
 
