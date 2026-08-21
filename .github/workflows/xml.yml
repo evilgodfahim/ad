@@ -2,12 +2,14 @@ name: Parse Opinion to XML
 
 on:
   schedule:
-    - cron: "15 * * * *"   # 00:00 UTC = 6:00 AM BD time
+    - cron: "15 * * * *"
   workflow_dispatch:
 
 jobs:
   parse:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write        # 鈫� KEY FIX: default token is read-only without this
 
     steps:
       - name: Checkout
@@ -29,5 +31,6 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add articles.xml
-          git commit -m "Daily XML update" || echo "No changes"
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Update articles XML $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git push
